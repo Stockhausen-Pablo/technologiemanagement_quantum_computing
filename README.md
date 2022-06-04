@@ -1,1 +1,1 @@
-# akthe2022_quantum_computing
+# technologiemanagement_quantum_computing
