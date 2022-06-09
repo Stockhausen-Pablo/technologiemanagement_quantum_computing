@@ -9,4 +9,60 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+# 0. Install & import packages
+
+### Install
+
+```{r}
+install.packages("tibble")
+install.packages("dplyr")
+install.packages("tidyr")
+install.packages("igraph")
+install.packages("tidyverse")
+```
+
+### Import
+
+```{r}
+library("igraph")
+library("tibble")
+library("dplyr")
+library("tidyr")
+library("tidyverse")
+```
+
+
+# 1. Data collection
+
+Data set is given and contains patents regarding quantum computing.
+
+Import data:
+```{r}
+df_qc <- read.csv("Quantum computing.csv", sep=";")
+```
+
+# 2. Data cleaning and mapping
+
+Check if data set is in correct format
+```{r}
+df_qc <- tibble(df_qc)
+```
+
+
+# 3. Network visualization
+# 4. Network analysis
+
+
+
+### apply rules
+
+```{r}
+inventors <- df_qc[1,]$Inventors
+
+inventors_split <- strsplit(inventors, "\n")
+
+inventors_split[[1]][1]
+```
+
+
+
