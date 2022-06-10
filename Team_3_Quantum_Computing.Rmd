@@ -48,6 +48,48 @@ Check if data set is in correct format
 df_qc <- tibble(df_qc)
 ```
 
+Clean Data
+```{r}
+df_qc <- df_qc %>% 
+  mutate(Inventors=strsplit(Inventors, "\n")) %>% 
+  unnest(Inventors)
+```
+
+### Metrics
+
+edge list
+```{r}
+edge_list <- df_qc %>%
+  select(Inventors, Title, No) %>%
+  inner_join(., select(., Inventors, No), by="No") %>%
+  filter(Inventors.x != Inventors.y) %>%
+  unique %>%
+  arrange(Title, No)
+
+# replace blanks with _
+edge_list$Inventors.x <- gsub(" ", "_", edge_list$Inventors.x)
+edge_list$Inventors.y <- gsub(" ", "_", edge_list$Inventors.y)
+```
+
+edge matrix
+```{r}
+unique_nodes <- unique(edge_list$Inventors.x)
+edges_length <- length(unique_nodes)
+
+edge_matrix <- matrix(, nrow = edges_length, ncol = edges_length, dimnames = list(unique_nodes, unique_nodes))
+
+
+for(i in 1:edges_length) {
+  
+  prim_inventor <- edge_list[[i,"Inventors.x"]]
+  sec_inventor <- edge_list[[i,"Inventors.y"]]
+  edge_matrix[prim_inventor,sec_inventor] <- 1 
+}
+
+edge_matrix[is.na(edge_matrix)] = 0
+```
+
+
 
 # 3. Network visualization
 # 4. Network analysis
