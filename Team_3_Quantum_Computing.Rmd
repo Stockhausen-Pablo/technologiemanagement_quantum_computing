@@ -14,21 +14,22 @@ knitr::opts_chunk$set(echo = TRUE)
 ### Install
 
 ```{r}
-install.packages("tibble")
-install.packages("dplyr")
-install.packages("tidyr")
-install.packages("igraph")
-install.packages("tidyverse")
+#install.packages("tibble")
+#install.packages("dplyr")
+#install.packages("tidyr")
+#install.packages("igraph")
+#install.packages("qgraph")
 ```
 
 ### Import
 
-```{r}
-library("igraph")
+```{r, warning=FALSE}
 library("tibble")
 library("dplyr")
 library("tidyr")
-library("tidyverse")
+
+library("igraph")
+library("qgraph")
 ```
 
 
@@ -80,7 +81,6 @@ edge_matrix <- matrix(, nrow = edges_length, ncol = edges_length, dimnames = lis
 
 
 for(i in 1:edges_length) {
-  
   prim_inventor <- edge_list[[i,"Inventors.x"]]
   sec_inventor <- edge_list[[i,"Inventors.y"]]
   edge_matrix[prim_inventor,sec_inventor] <- 1 
@@ -89,9 +89,31 @@ for(i in 1:edges_length) {
 edge_matrix[is.na(edge_matrix)] = 0
 ```
 
+Transform edge matrix into adjmatrix
+```{r}
+adj_matrix <- graph.adjacency(edge_matrix, mode = "undirected")
+```
 
 
 # 3. Network visualization
+
+plot graph based on edge matrix
+```{r}
+network_graph <- graph_from_adjacency_matrix(
+  edge_matrix,
+  mode = "undirected",
+  weighted = TRUE
+)
+
+# Use qgraph to plot large graphs
+edge_list_from_igraph <- get.edgelist(network_graph,names=FALSE)
+
+qgraph_layout_modified <- qgraph.layout.fruchtermanreingold(edge_list_from_igraph,vcount=vcount(network_graph), area=8*(vcount(network_graph)^2),repulse.rad=(vcount(network_graph)^3.1))
+
+plot(network_graph,layout=qgraph_layout_modified,vertex.size=4,vertex.label=NA)
+mtext("Network graph based fruchtermanreingold layout", side=1)
+```
+
 # 4. Network analysis
 
 
