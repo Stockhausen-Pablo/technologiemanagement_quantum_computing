@@ -23,11 +23,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Import
 
-```{r, warning=FALSE}
+```{r, message=FALSE}
 library("tibble")
 library("dplyr")
 library("tidyr")
-
 library("igraph")
 library("qgraph")
 ```
@@ -114,9 +113,87 @@ plot(network_graph,layout=qgraph_layout_modified,vertex.size=4,vertex.label=NA)
 mtext("Network graph based fruchtermanreingold layout", side=1)
 ```
 
+# 4. Fundamenting patent-based concepts
+
+**1. Innovation / Invention**
+
+```{r}
+
+```
+
+**2. Novelty**
+
+```{r}
+
+```
+
+**3. Knowledge assets and capabilities**
+
+```{r}
+
+```
+
+**4. Innovation impact**
+
+```{r}
+
+```
+
+**5. Relatedness**
+
+```{r}
+
+```
+
+**6. Diversity**
+
+```{r}
+
+```
+
+**7. Technological environment**
+
+```{r}
+
+```
+
+**8. Learning**
+
+```{r}
+
+```
+
+**9. Knowledge flows**
+
+```{r}
+
+```
+
+**10. Collaboration**
+
+```{r}
+
+```
+
 # 4. Network analysis
 
+**1. Positional analysis**
 
+Centrality
+
+Brokerage
+
+**2. Dyadic analysis**
+
+Strong or weak thies?
+
+**3. Subgroup and whole network analysis**
+
+Components, Cliques and Clusters
+
+Centralization
+
+Density
 
 ### apply rules
 
