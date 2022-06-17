@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Import
 
-```{r, message=FALSE}
+```{r, warning=FALSE, message=FALSE}
 library("tibble")
 library("dplyr")
 library("tidyr")
@@ -53,6 +53,12 @@ Clean Data
 df_qc <- df_qc %>% 
   mutate(Inventors=strsplit(Inventors, "\n")) %>% 
   unnest(Inventors)
+
+df_industry_qc <- df_qc %>%
+  mutate(Applicants=strsplit(Applicants, "\n")) %>% 
+  unnest(Applicants)
+
+df_industry_qc$Applicants <- gsub(" ", "_", df_industry_qc$Applicants)
 ```
 
 ### Metrics
@@ -73,19 +79,19 @@ edge_list$Inventors.y <- gsub(" ", "_", edge_list$Inventors.y)
 
 edge matrix
 ```{r}
-unique_nodes <- unique(edge_list$Inventors.x)
+unique_nodes <- unique(c(edge_list$Inventors.x, edge_list$Inventors.y))
 edges_length <- length(unique_nodes)
 
 edge_matrix <- matrix(, nrow = edges_length, ncol = edges_length, dimnames = list(unique_nodes, unique_nodes))
 
+edge_matrix[is.na(edge_matrix)] = 0
 
 for(i in 1:edges_length) {
   prim_inventor <- edge_list[[i,"Inventors.x"]]
   sec_inventor <- edge_list[[i,"Inventors.y"]]
-  edge_matrix[prim_inventor,sec_inventor] <- 1 
+  edge_matrix[prim_inventor,sec_inventor] <- edge_matrix[prim_inventor,sec_inventor] + 1 
 }
 
-edge_matrix[is.na(edge_matrix)] = 0
 ```
 
 Transform edge matrix into adjmatrix
@@ -165,7 +171,35 @@ mtext("Network graph based fruchtermanreingold layout", side=1)
 
 **9. Knowledge flows**
 
+The transfer or spillover of knowledge, information, and/or skills from one entity to another (e.g., Mudambi & Navarra, 2004; Roach & Cohen, 2013)
+
+...for example, Alvarez-Garrido and Dushnitsky (2016) measure innovativeness of biotechnology firms using both patents and scientific publications, and Roach and Cohen (2013) use publication coauthorship between academics and industrial R&D personnel instead of patent citations to measure knowledge flow.
+
+1: industrial
+2: academic
+3: private
+
 ```{r}
+evaluate_knowledge_flow_type <- function(x){
+  industrial <- "_INC_|INC_|LLC_|_LLC_"
+  academic <- "UNIV_|_UNIV_"
+  if(grepl(industrial, x)){
+    return("industrial")
+  }else{
+    if(grepl(academic, x)){
+      return("academic")
+    }else{
+      return("private")
+    }
+  }
+}
+
+df_industry_qc$Knowledge.Flows <- NA
+
+for (i in 1:nrow(df_industry_qc)){
+  row <- df_industry_qc[i,]
+  df_industry_qc[i,"Knowledge.Flows"] <- evaluate_knowledge_flow_type(row$Applicants)
+}
 
 ```
 
