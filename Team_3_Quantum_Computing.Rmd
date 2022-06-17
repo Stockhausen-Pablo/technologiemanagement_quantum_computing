@@ -29,6 +29,7 @@ library("dplyr")
 library("tidyr")
 library("igraph")
 library("qgraph")
+library("visNetwork")
 ```
 
 
@@ -57,8 +58,6 @@ df_qc <- df_qc %>%
 df_industry_qc <- df_qc %>%
   mutate(Applicants=strsplit(Applicants, "\n")) %>% 
   unnest(Applicants)
-
-df_industry_qc$Applicants <- gsub(" ", "_", df_industry_qc$Applicants)
 ```
 
 ### Metrics
@@ -66,7 +65,7 @@ df_industry_qc$Applicants <- gsub(" ", "_", df_industry_qc$Applicants)
 edge list
 ```{r}
 edge_list <- df_qc %>%
-  select(Inventors, Title, No) %>%
+  select(Inventors, Title, Applicants, No) %>%
   inner_join(., select(., Inventors, No), by="No") %>%
   filter(Inventors.x != Inventors.y) %>%
   unique %>%
@@ -75,6 +74,7 @@ edge_list <- df_qc %>%
 # replace blanks with _
 edge_list$Inventors.x <- gsub(" ", "_", edge_list$Inventors.x)
 edge_list$Inventors.y <- gsub(" ", "_", edge_list$Inventors.y)
+edge_list$Applicants <- gsub(" ", "_", edge_list$Applicants)
 ```
 
 edge matrix
@@ -175,14 +175,14 @@ The transfer or spillover of knowledge, information, and/or skills from one enti
 
 ...for example, Alvarez-Garrido and Dushnitsky (2016) measure innovativeness of biotechnology firms using both patents and scientific publications, and Roach and Cohen (2013) use publication coauthorship between academics and industrial R&D personnel instead of patent citations to measure knowledge flow.
 
-1: industrial
-2: academic
-3: private
+- industrial
+- academic
+- private
 
 ```{r}
 evaluate_knowledge_flow_type <- function(x){
-  industrial <- "_INC_|INC_|LLC_|_LLC_"
-  academic <- "UNIV_|_UNIV_"
+  industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
+  academic <- "UNIV_|_UNIV_|INST_|_INST_"
   if(grepl(industrial, x)){
     return("industrial")
   }else{
@@ -194,13 +194,36 @@ evaluate_knowledge_flow_type <- function(x){
   }
 }
 
-df_industry_qc$Knowledge.Flows <- NA
+edge_list$group <- NA
 
-for (i in 1:nrow(df_industry_qc)){
-  row <- df_industry_qc[i,]
-  df_industry_qc[i,"Knowledge.Flows"] <- evaluate_knowledge_flow_type(row$Applicants)
+for (i in 1:nrow(edge_list)){
+  row <- edge_list[i,]
+  edge_list[i,"group"] <- evaluate_knowledge_flow_type(row$Applicants)
 }
 
+knowledge_flows_df <- data.frame(from=edge_list$Inventors.x, to=edge_list$Inventors.y, group=edge_list$group)
+
+kf_graph <- graph_from_data_frame(knowledge_flows_df, directed = FALSE)
+
+data <- toVisNetworkData(kf_graph)
+
+nodes_groups <- vector()
+
+for (current_node in data$nodes$id){
+  df_sub <- knowledge_flows_df[knowledge_flows_df$from == current_node, ]
+  nodes_groups <- c(nodes_groups, names(which.max(table(df_sub$group)))) # max of group is indicator for final group
+}
+
+data$nodes$group <- nodes_groups 
+vis_network <- visNetwork(nodes = data$nodes, edges = data$edges)
+
+vis_network %>% 
+  visEdges(arrows = list(to = list(enabled= FALSE))) %>%
+  visGroups(groupname = "academic", color = "red") %>%
+  visGroups(groupname = "industrial", color = "black") %>%
+  visGroups(groupname = "private", color = "blue") %>%
+  visClusteringByGroup(groups = c("academic", "industrial", "private"), label = "Group : ", shape = "ellipse", color = "blue", force = F) %>%
+  visIgraphLayout(layout = "layout_nicely")
 ```
 
 **10. Collaboration**
