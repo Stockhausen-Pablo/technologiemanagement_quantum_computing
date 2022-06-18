@@ -211,7 +211,7 @@ nodes_groups <- vector()
 
 for (current_node in data$nodes$id){
   df_sub <- knowledge_flows_df[knowledge_flows_df$from == current_node, ]
-  nodes_groups <- c(nodes_groups, names(which.max(table(df_sub$group)))) # max of group is indicator for final group
+  nodes_groups <- c(nodes_groups, names(which.max(table(df_sub$group)))) # max occurrences of group is indicator for final group
 }
 
 data$nodes$group <- nodes_groups 
@@ -221,15 +221,55 @@ vis_network %>%
   visEdges(arrows = list(to = list(enabled= FALSE))) %>%
   visGroups(groupname = "academic", color = "red") %>%
   visGroups(groupname = "industrial", color = "black") %>%
-  visGroups(groupname = "private", color = "blue") %>%
+  visGroups(groupname = "private", color = "green") %>%
   visClusteringByGroup(groups = c("academic", "industrial", "private"), label = "Group : ", shape = "ellipse", color = "blue", force = F) %>%
   visIgraphLayout(layout = "layout_nicely")
 ```
 
 **10. Collaboration**
 
-```{r}
+The joint development of technological knowledge between entities (e.g., Chatterji & Fabrizio, 2012; Grigoriou & Rothaermel, 2014)
 
+- Patents jointly applied by corporate researchers and university scientists (Chatterji & Fabrizio, 2012)
+  -> broker between industrial and academic
+
+```{r}
+c_df <- knowledge_flows_df
+
+c_graph <- graph_from_data_frame(c_df, directed = FALSE)
+
+c_data <- toVisNetworkData(kf_graph)
+
+nodes_groups <- vector()
+
+for (current_node in c_data$nodes$id){
+  df_sub <- c_df[c_df$from == current_node, ]
+  if(!(all(c("academic", "industrial") %in% df_sub$group))){
+    c_df <- c_df[!(rownames(c_df) %in% rownames(df_sub)),]
+  }
+}
+
+c_graph <- graph_from_data_frame(c_df, directed = FALSE)
+
+c_data <- toVisNetworkData(c_graph)
+
+nodes_groups <- vector()
+
+for (current_node in c_data$nodes$id){
+ df_sub <- knowledge_flows_df[knowledge_flows_df$from == current_node, ]
+  nodes_groups <- c(nodes_groups, names(which.max(table(df_sub$group))))
+}
+
+c_data$nodes$group <- nodes_groups
+vis_network <- visNetwork(nodes = c_data$nodes, edges = c_data$edges)
+
+vis_network %>% 
+  visEdges(arrows = list(to = list(enabled= FALSE))) %>%
+  visGroups(groupname = "academic", color = "red") %>%
+  visGroups(groupname = "industrial", color = "black") %>%
+  visGroups(groupname = "private", color = "green") %>%
+  visClusteringByGroup(groups = c("academic", "industrial"), label = "Group : ", shape = "ellipse", color = "blue", force = F) %>%
+  visIgraphLayout(layout = "layout_nicely")
 ```
 
 # 4. Network analysis
