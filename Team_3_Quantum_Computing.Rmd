@@ -136,7 +136,10 @@ mtext("Network graph based fruchtermanreingold layout", side=1)
 **3. Knowledge assets and capabilities**
 
 ```{r}
-
+PatentClass <- substr(df_qc$IPC,1,1)
+factor_pc <- factor(PatentClass)
+levels(factor_pc) 
+# 6 different levels i.e. 6 different technology classes
 ```
 
 **4. Innovation impact**
