@@ -19,6 +19,9 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("tidyr")
 #install.packages("igraph")
 #install.packages("qgraph")
+#install.packages("stringr")
+#install.packages("ggplot2")
+#install.packages("visNetwork")
 ```
 
 ### Import
@@ -157,7 +160,50 @@ levels(factor_pc)
 **6. Diversity**
 
 ```{r}
+library("ggplot2")
+library("stringr")
+library(dplyr)
+library(tidyr)
+#clean data 
 
+df_qc2 <- df_qc %>% 
+  mutate(IPC=strsplit(IPC, "\n")) %>% 
+  unnest(IPC)
+
+# clean data: remove whitespaces
+
+df_qc2$Inventors <- str_trim(df_qc2$Inventors) 
+
+#extract the 4 digit IPC class 
+df_qc2$IPC <- substring(df_qc2$IPC, 1, 4)
+
+# create a df with the frequency of IPCs grouped by Inventor and IPC class
+
+df_ipc_class_freq <- aggregate(df_qc2$IPC, by=list( df_qc2$Inventors, df_qc2$IPC), FUN= length) %>%
+  setNames(c("Inventors", "IPC", "IPC_class_freq"))
+
+#Calculate HII score 
+#step 1: sum the number of IPCs grouped by IPC class for each Inventor 
+
+df_total_ipc<- aggregate(df_ipc_class_freq$IPC_class_freq, by= list( df_ipc_class_freq$Inventors), FUN = sum) %>%
+  setNames(c("Inventors", "IPC_total"))
+
+#step 2: join dataframes: df_ipc_class_freq and df_total_ipc by inventor
+df_diversity_2<- inner_join(x = df_ipc_class_freq,y = df_total_ipc, by = "Inventors") 
+
+df_diversity_2<- df_diversity_2[order(df_diversity_2$Inventors), ]
+
+#step 3: compute HII score 
+df_diversity_3 <- df_diversity_2 %>% 
+  mutate(square =(df_diversity_2$IPC_class_freq/df_diversity_2$IPC_total)^2)
+  
+df_diversity_4 <- aggregate(df_diversity_3$square, by = list(df_diversity_3$Inventors), FUN = sum) %>%
+  setNames(c("Inventors", "Hii_Score")) 
+
+  ggplot(data=df_diversity_4 , aes( x = Hii_Score)) + 
+  geom_histogram(color="darkblue", fill="lightblue")+
+    labs(x = "Hii Scores of Inventors", y= "Frequency")
+  
 ```
 
 **7. Technological environment**
