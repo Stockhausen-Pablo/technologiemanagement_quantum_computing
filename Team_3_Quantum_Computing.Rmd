@@ -209,6 +209,8 @@ df_diversity_4 <- aggregate(df_diversity_3$square, by = list(df_diversity_3$Inve
 **7. Technological environment**
 
 ```{r}
+df_qc$cleaned.date <- substr(df_qc$Earliest.publication,1,4)
+print(table(df_qc$cleaned.date))
 
 ```
 
