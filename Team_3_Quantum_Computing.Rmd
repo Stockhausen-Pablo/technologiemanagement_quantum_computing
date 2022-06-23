@@ -75,6 +75,28 @@ edge_list <- df_qc %>%
 edge_list$Inventors.x <- gsub(" ", "_", edge_list$Inventors.x)
 edge_list$Inventors.y <- gsub(" ", "_", edge_list$Inventors.y)
 edge_list$Applicants <- gsub(" ", "_", edge_list$Applicants)
+
+# Insert according to "from" or "x" author, needs still to be weighted
+evaluate_knowledge_flow_type <- function(x){
+  industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
+  academic <- "UNIV_|_UNIV_|INST_|_INST_"
+  if(grepl(industrial, x)){
+    return("industrial")
+  }else{
+    if(grepl(academic, x)){
+      return("academic")
+    }else{
+      return("private")
+    }
+  }
+}
+
+edge_list$group <- NA
+
+for (i in 1:nrow(edge_list)){
+  row <- edge_list[i,]
+  edge_list[i,"group"] <- evaluate_knowledge_flow_type(row$Applicants)
+}
 ```
 
 edge matrix
@@ -180,27 +202,6 @@ The transfer or spillover of knowledge, information, and/or skills from one enti
 - private
 
 ```{r}
-evaluate_knowledge_flow_type <- function(x){
-  industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
-  academic <- "UNIV_|_UNIV_|INST_|_INST_"
-  if(grepl(industrial, x)){
-    return("industrial")
-  }else{
-    if(grepl(academic, x)){
-      return("academic")
-    }else{
-      return("private")
-    }
-  }
-}
-
-edge_list$group <- NA
-
-for (i in 1:nrow(edge_list)){
-  row <- edge_list[i,]
-  edge_list[i,"group"] <- evaluate_knowledge_flow_type(row$Applicants)
-}
-
 knowledge_flows_df <- data.frame(from=edge_list$Inventors.x, to=edge_list$Inventors.y, group=edge_list$group)
 
 kf_graph <- graph_from_data_frame(knowledge_flows_df, directed = FALSE)
@@ -292,15 +293,8 @@ Centralization
 
 Density
 
-### apply rules
+# 5. Hypothesis
 
-```{r}
-inventors <- df_qc[1,]$Inventors
-
-inventors_split <- strsplit(inventors, "\n")
-
-inventors_split[[1]][1]
-```
-
+**H1: Generalists are more likely to adopt the broker role in a network in order to connect specialists or non-generalist teams with each other.**
 
 
