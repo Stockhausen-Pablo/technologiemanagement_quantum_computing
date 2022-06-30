@@ -56,6 +56,12 @@ df_qc <- df_qc %>%
 df_applicants_qc <- df_qc %>%
   mutate(Applicants=strsplit(Applicants, "\n")) %>% 
   unnest(Applicants)
+
+# Remove spaces from Inventors
+df_qc$Inventors <- gsub(" ", "_", df_qc$Inventors)
+
+# Replace _ if its last character
+df_qc$Inventors <- sub("_$", "", df_qc$Inventors)
 ```
 
 # 2. Create necessary objects
@@ -167,10 +173,34 @@ mtext("Network graph based on fruchtermanreingold layout", side=1)
 ```{r}
 # Measure betweenness centrality for each inventor to determine the brokerage
 
+
 # Mark who is a broker
 
-# Calculate the Herfindhal index for each inventor
 
+# Calculate the Herfindhal index for each inventor
+df_ipc_qc <- df_qc %>% 
+  mutate(IPC=strsplit(IPC, "\n")) %>% 
+  unnest(IPC)
+
+df_ipc_qc$IPC <- substring(df_ipc_qc$IPC, 1, 4)
+
+unique_inventors <- unique(df_ipc_qc$Inventors)
+
+df_herf <- data.frame(Inventor=unique_inventors, Herf_Index = 0)
+
+for(inventor in unique_inventors){
+  df_ipc_qc_sub <- df_ipc_qc[df_ipc_qc$Inventors == inventor, ]
+  ipc_table <- table(df_ipc_qc_sub$IPC)
+  total_ipcs <- sum(ipc_table)
+  table_as_df <- as.data.frame(ipc_table)
+  herf_index <- 0
+  for (i in 1:nrow(table_as_df)){
+    row <- table_as_df[i,]
+    val <- row$Freq
+    herf_index <- herf_index + (val / total_ipcs)^2
+  }
+  df_herf[df_herf$Inventor == inventor, ] <- list(inventor, herf_index)
+}
 
 # Evaluate who is a generalist
 # (1-H) >= (Top 10% Herfindhal index distribution)
