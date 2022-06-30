@@ -1,0 +1,204 @@
+---
+title: "Appendix Team 3 Quantum_Computing"
+output: html_document
+author: "Pablo Stockhausen, "
+date: '2022-06-26'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+_This R Markdown file will be provided as appendix to the final report of Team 3. Refering this appendix will follow the format of (Appendix I-"outline item of Markdown file"). For example, refering the code of Hypothesis 2 will display as following in the report: (Appendix I-1.2). Please use a browser to interpret the html file._
+
+# 0. Install & import packages
+
+### Install
+
+```{r, warning=FALSE, message=FALSE}
+required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork")
+
+to_install_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+
+if(length(to_install_packages)) invisible(install.packages(to_install_packages))
+```
+
+### Import
+
+```{r, warning=FALSE, message=FALSE}
+required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork")
+
+invisible(lapply(required_packages, require, character.only = T))
+```
+
+# 1. Data collection & cleaning
+
+---
+
+Data set is given and contains patents regarding quantum computing.
+
+**1.1 Import data**
+```{r}
+df_qc <- read.csv("Quantum computing.csv", sep=";")
+```
+---
+
+**1.2 Clean Data**
+```{r}
+# df_qc gets transformed where each row represents an inventor
+df_qc <- df_qc %>% 
+  mutate(Inventors=strsplit(Inventors, "\n")) %>% 
+  unnest(Inventors)
+
+# df_qc gets transformed where each row represents an applicant in connection with each inventor
+df_applicants_qc <- df_qc %>%
+  mutate(Applicants=strsplit(Applicants, "\n")) %>% 
+  unnest(Applicants)
+```
+
+# 2. Create necessary objects
+
+---
+
+**2.1 Create the edge list**
+```{r}
+edge_list <- df_qc %>%
+  select(Inventors, Title, Applicants, No) %>%
+  inner_join(., select(., Inventors, No), by="No") %>%
+  filter(Inventors.x != Inventors.y) %>%
+  unique %>%
+  arrange(Title, No)
+
+#rename to columns
+names(edge_list)[names(edge_list) == "Inventors.x"] <- "from"
+names(edge_list)[names(edge_list) == "Inventors.y"] <- "to"
+
+# replace blanks with _
+edge_list$from <- gsub(" ", "_", edge_list$from)
+edge_list$to <- gsub(" ", "_", edge_list$to)
+edge_list$Applicants <- gsub(" ", "_", edge_list$Applicants)
+
+# Selecting of applicant type is based on the majority of type occurrences
+evaluate_knowledge_flow_type <- function(x){
+  industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
+  academic <- "UNIV_|_UNIV_|INST_|_INST_"
+  if(grepl(industrial, x)){
+    return("industrial")
+  }else{
+    if(grepl(academic, x)){
+      return("academic")
+    }else{
+      return("private")
+    }
+  }
+}
+
+edge_list$group <- NA
+
+for (i in 1:nrow(edge_list)){
+  row <- edge_list[i,]
+  edge_list[i,"group"] <- evaluate_knowledge_flow_type(row$Applicants)
+}
+```
+
+---
+
+**2.2 Create the edge matrix**
+```{r}
+unique_nodes <- unique(c(edge_list$from, edge_list$to))
+edges_length <- length(unique_nodes)
+
+edge_matrix <- matrix(, nrow = edges_length, ncol = edges_length, dimnames = list(unique_nodes, unique_nodes))
+
+edge_matrix[is.na(edge_matrix)] = 0
+
+for(i in 1:edges_length) {
+  prim_inventor <- edge_list[[i,"from"]]
+  sec_inventor <- edge_list[[i,"to"]]
+  edge_matrix[prim_inventor,sec_inventor] <- edge_matrix[prim_inventor,sec_inventor] + 1 
+}
+
+```
+---
+
+**2.2 Create the graph object**
+```{r}
+network_graph <- graph_from_adjacency_matrix(
+  edge_matrix,
+  mode = "undirected",
+  weighted = TRUE
+)
+```
+---
+
+# 3. Network visualization
+
+**3.1 Preview of network graph with fruchtermanreingold Layout**
+```{r}
+# Use qgraph to plot large graphs
+edge_list_from_igraph <- get.edgelist(network_graph,names=FALSE)
+
+qgraph_layout_modified <- qgraph.layout.fruchtermanreingold(edge_list_from_igraph,vcount=vcount(network_graph), area=8*(vcount(network_graph)^2),repulse.rad=(vcount(network_graph)^3.1))
+
+plot(network_graph,layout=qgraph_layout_modified,vertex.size=4,vertex.label=NA)
+mtext("Network graph based on fruchtermanreingold layout", side=1)
+```
+
+# 4. Answering Hypothesis
+
+---
+
+* **H1: We expect more generalists to adopt the broker role in a network than specialists.**
+
+```{r}
+# Measure betweenness centrality for each inventor to determine the brokerage
+
+# Mark who is a broker
+
+# Calculate the Herfindhal index for each inventor
+
+# Evaluate who is a generalist
+# (1-H) >= (Top 10% Herfindhal index distribution)
+
+# Evaluate who is a specalist
+# (1-H) <=  (Lowest 10% Herfindhal index distribution)
+
+# Connect brokerage and generalist/specialist distribution in final numbers
+
+# Visualize results
+
+```
+
+---
+
+* **H2: We expect that more generalists who adopt the broker role in a network to be of academic origin.**
+
+```{r}
+# Use the dataframe from H1
+
+# Determine origin of each inventor | view & use dataframe "edge_list"
+
+# Calculate distribution of identified generalist who are brokers and the applicant type
+
+# Output results in numbers
+
+# Visualize results
+
+```
+
+---
+
+* **H3: We expect peripheral players to be specialists.**
+
+```{r}
+# Calculate centrality for each inventor
+
+# Find a percentage of lowest centrality distribution who are the peripheral players
+
+# Get the distribution of generalist/specialist based on the peripheral players
+
+# Output result in numbers
+
+# Visualize results
+
+```
