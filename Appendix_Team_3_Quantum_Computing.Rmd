@@ -16,17 +16,19 @@ _This R Markdown file will be provided as appendix to the final report of Team 3
 ### Install
 
 ```{r, warning=FALSE, message=FALSE}
-required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork", "GGally", "network", "sna", "scales", "intergraph")
+required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork", "data.table", "centiserve", "reshape2", "remotes", "ggcorrplot")
 
 to_install_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 
-if(length(to_install_packages)) invisible(install.packages(to_install_packages))
+if(length(to_install_packages)) invisible(install.packages(to_install_packages, dependencies = TRUE))
+
+remotes::install_github("clementviolet/omnivor")
 ```
 
 ### Import
 
 ```{r, warning=FALSE, message=FALSE}
-required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork", "GGally", "network", "sna", "scales", "intergraph")
+required_packages <- c("tibble", "dplyr", "tidyr", "tidyverse", "igraph", "qgraph", "stringr", "ggplot2", "visNetwork", "data.table", "centiserve", "reshape2", "ggcorrplot")
 
 invisible(lapply(required_packages, require, character.only = T))
 ```
@@ -47,21 +49,35 @@ df_qc <- read.csv("Quantum computing.csv", sep=";")
 
 **1.2 Clean Data**
 ```{r}
+# Drop Rows where Inventors, Applicants or IPC classes or empty or NA
+df_qc <- df_qc[!(is.na(df_qc$IPC) | df_qc$IPC==""), ]
+df_qc <- df_qc[!(is.na(df_qc$Inventors) | df_qc$Inventors==""), ]
+df_qc <- df_qc[!(is.na(df_qc$Applicants) | df_qc$Applicants==""), ]
+
 # df_qc gets transformed where each row represents an inventor
 df_qc <- df_qc %>% 
   mutate(Inventors=strsplit(Inventors, "\n")) %>% 
   unnest(Inventors)
+
+# Clean Inventors & Applicants: Needed to adapt the igraph object cleaning
+df_qc$Inventors <- gsub(" ", "_", df_qc$Inventors)
+df_qc$Inventors <- gsub("-", ".", df_qc$Inventors)
+df_qc$Inventors <- chartr("[]", "..", df_qc$Inventors)
+df_qc$Inventors <- chartr("<>", "..", df_qc$Inventors)
+df_qc$Applicants <- gsub(" ", "_", df_qc$Applicants)
+df_qc$Applicants <- sub("_$", "", df_qc$Applicants)
+df_qc$Applicants <- gsub("-", ".", df_qc$Applicants)
+df_qc$Applicants <- chartr("[]", "..", df_qc$Applicants)
+df_qc$Applicants <- chartr("<>", "..", df_qc$Applicants)
+
+# Replace _ if its last character
+df_qc$Inventors <- sub("_$", "", df_qc$Inventors)
 
 # df_qc gets transformed where each row represents an applicant in connection with each inventor
 df_applicants_qc <- df_qc %>%
   mutate(Applicants=strsplit(Applicants, "\n")) %>% 
   unnest(Applicants)
 
-# Remove spaces from Inventors
-df_qc$Inventors <- gsub(" ", "_", df_qc$Inventors)
-
-# Replace _ if its last character
-df_qc$Inventors <- sub("_$", "", df_qc$Inventors)
 ```
 
 # 2. Create necessary objects
@@ -78,17 +94,20 @@ edge_list <- df_qc %>%
   unique %>%
   arrange(Title, No)
 
+# Include the patents, where there is only one author
+for (i in 1:nrow(df_qc)){
+  row <- df_qc[i,]
+  if(sum(df_qc$No == row$No) == 1){
+    edge_list[nrow(edge_list) + 1,] <- list(row$Inventors, row$Title, row$Applicants, row$No, row$Inventors)
+  }
+}
+
 #rename to columns
 names(edge_list)[names(edge_list) == "Inventors.x"] <- "from"
 names(edge_list)[names(edge_list) == "Inventors.y"] <- "to"
 
-# replace blanks with _
-edge_list$from <- gsub(" ", "_", edge_list$from)
-edge_list$to <- gsub(" ", "_", edge_list$to)
-edge_list$Applicants <- gsub(" ", "_", edge_list$Applicants)
-
 # Selecting of applicant type is based on the majority of type occurrences
-evaluate_knowledge_flow_type <- function(x){
+identify_applicant_type <- function(x){
   industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
   academic <- "UNIV_|_UNIV_|INST_|_INST_"
   if(grepl(industrial, x)){
@@ -106,7 +125,7 @@ edge_list$group <- NA
 
 for (i in 1:nrow(edge_list)){
   row <- edge_list[i,]
-  edge_list[i,"group"] <- evaluate_knowledge_flow_type(row$Applicants)
+  edge_list[i,"group"] <- identify_applicant_type(row$Applicants)
 }
 ```
 
@@ -127,6 +146,7 @@ for(i in 1:edges_length) {
   edge_matrix[prim_inventor,sec_inventor] <- edge_matrix[prim_inventor,sec_inventor] + 1 
 }
 
+rm(list=c("prim_inventor","sec_inventor", "i"))
 ```
 
 ---
@@ -158,10 +178,17 @@ mtext("Network graph based on fruchtermanreingold layout", side=1)
 
 ---
 
-**3.2 Preview of network graph with ggnet2**
+**3.2 Preview of network graph with visNetwork**
 
 ```{r}
-#ggnet2(network_graph, palette = col_palet, edge.alpha = 1/4, edge.size="weight", #size ="outdegree", max_size = 4, size.cut=3) + coord_equal()
+df_visNetwork <- data.frame(from=edge_list$from, to=edge_list$to)
+vis_graph <- graph_from_data_frame(df_visNetwork, directed = FALSE)
+vis_data <- toVisNetworkData(vis_graph)
+vis_network <- visNetwork(nodes = vis_data$nodes, edges = vis_data$edges)
+
+vis_network %>% 
+  visEdges(arrows = list(to = list(enabled= FALSE)), length=30) %>%
+  visIgraphLayout(layout = "layout_nicely")
 ```
 
 # 4. Answering Hypothesis
@@ -171,13 +198,7 @@ mtext("Network graph based on fruchtermanreingold layout", side=1)
 * **H1: We expect more generalists to adopt the broker role in a network than specialists.**
 
 ```{r}
-# Measure betweenness centrality for each inventor to determine the brokerage
-
-
-# Mark who is a broker
-
-
-# Calculate the Herfindhal index for each inventor
+# Create data objects that are required for calculations 
 df_ipc_qc <- df_qc %>% 
   mutate(IPC=strsplit(IPC, "\n")) %>% 
   unnest(IPC)
@@ -186,8 +207,61 @@ df_ipc_qc$IPC <- substring(df_ipc_qc$IPC, 1, 4)
 
 unique_inventors <- unique(df_ipc_qc$Inventors)
 
-df_herf <- data.frame(Inventor=unique_inventors, Herf_Index = 0)
+df_h1 <- data.frame(Inventor=unique_inventors, Katz_Centr = 1.000000, Betw_Centr = 0, Herf_Index = 0, Herf_Index_ZScore = 0, IsBroker="NotBroker", Diversity_Type="None", Applicant_Type="")
 
+# Measure betweenness centrality for each inventor to determine the brokerage
+library(omnivor)
+betw_centr <- betweeness_centrality(network_graph, normalized=T) # normalized = T or F --> clarify
+df_betw_centr <- data.frame(as.list(betw_centr))
+t_df_betw_centr <- transpose(df_betw_centr)
+t_df_betw_centr$Inventor <- colnames(df_betw_centr)
+
+for(inventor in unique_inventors){
+  sub_df_qc <- df_qc[df_qc$Inventors == inventor, ]
+  if(nrow(sub_df_qc) > 1){
+    centr <- t_df_betw_centr[t_df_betw_centr$Inventor == inventor, "V1"]
+    df_h1[df_h1$Inventor == inventor, "Betw_Centr"] <- centr
+  }
+}
+
+# We are using Centrality measure by Katz as betweeness centrality gets manipulated by the isolated interconnected patent inventors, with alot of shortest paths. This is way we use a other calculation method that inspect the whole network edges, to have secondary factor for centrality.
+# Further we exclude inventors from the brokerage role that only have one patent.
+# Centrality measure by Katz
+# ...considering all direct connections and also the further interconnections of other actors
+# See: Landherr, A., Friedl, B., & Heidemann, J. (2010). A critical review of centrality measures in social networks. Bus Inform Syst Eng 2: 371–385.
+katzc <- katzcent(network_graph, vids = V(network_graph), alpha = 0.05)
+df_katzc <- data.frame(as.list(katzc))
+t_df_katzc <- transpose(df_katzc)
+t_df_katzc$Inventor <- colnames(df_katzc)
+
+for(inventor in unique_inventors){
+  sub_df_qc <- df_qc[df_qc$Inventors == inventor, ]
+  if(nrow(sub_df_qc) > 1){
+    centr <- t_df_katzc[t_df_katzc$Inventor == inventor, "V1"]
+    df_h1[df_h1$Inventor == inventor, "Katz_Centr"] <- centr
+  }
+}
+
+# Normalize Columns for visualization purpose
+normalization<-function(x){
+    return((x-min(x))/(max(x)-min(x)))
+}
+df_h1$Betw_Centr <- normalization(df_h1$Betw_Centr)
+df_h1$Katz_Centr <- normalization(df_h1$Katz_Centr)
+
+# Plot correlation between betweeness centrality and Katz Centrality measure
+
+# Mark who is a broker
+for(i in 1:nrow(df_h1)){
+  row <- df_h1[i,]
+  if((row$Betw_Centr > 0) | (row$Katz_Centr > 0)){
+  #if((row$Betw_Centr > 0) & (row$Katz_Centr > 1)){
+  #if((row$Betw_Centr > 0)){
+    df_h1[df_h1$Inventor == row$Inventor, "IsBroker"] <- "Broker"
+  }
+}
+
+# Calculate the Herf Index for each inventor
 for(inventor in unique_inventors){
   df_ipc_qc_sub <- df_ipc_qc[df_ipc_qc$Inventors == inventor, ]
   ipc_table <- table(df_ipc_qc_sub$IPC)
@@ -199,19 +273,116 @@ for(inventor in unique_inventors){
     val <- row$Freq
     herf_index <- herf_index + (val / total_ipcs)^2
   }
-  df_herf[df_herf$Inventor == inventor, ] <- list(inventor, herf_index)
+  df_h1[df_h1$Inventor == inventor, "Herf_Index"] <- herf_index
 }
 
-# Evaluate who is a generalist
-# (1-H) >= (Top 10% Herfindhal index distribution)
+## Plot Herf Index distribution
+# Histogram overlaid with kernel density curve
+x <- df_h1$Herf_Index
+h <- hist(x, main="Distribution of Herfindahl Index", xlab="Herfindahl Index", border="blue", col="green", freq=T, ylab = "Frequency")
 
-# Evaluate who is a specalist
+xfit <- seq(min(x), max(x), length=40)
+yfit <- dnorm(xfit, mean=mean(x), sd=sd(x))
+yfit <- yfit * diff(h$mids[1:2])*length(x)
+lines(xfit, yfit, col="blue", lwd=2)
+
+# Pre calculations before identifying generalists or specialists
+# Calculate Z scores
+# z score tells you how far a value is from the average of the data in terms of standard deviations.
+df_h1 <- df_h1 %>% mutate(Herf_Index_ZScore = (Herf_Index - mean(Herf_Index))/sd(Herf_Index))
+
+# Plot Distribution of Z-Scores
+ggplot(df_h1, aes(x = Herf_Index_ZScore)) +
+  geom_density() +
+  labs(x = "\n Z-Score (z)", y = "Density of (z)", title = "Distribution of (z)\n") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        axis.title.x = element_text(face="bold", colour="brown", size = 12),
+        axis.title.y = element_text(face="bold", colour="brown", size = 12))
+  
+# Evaluate who is a Specialist
+# H >= (Top 10% Herfindhal index z-score distribution)
+# Calculate top 10%
+# P(Z > c) = 0.1 ==> P(Z < c) = 0.9
+# use linear interpolation to find nearest values as 0.9 is not present in z table
+# For further information, see: https://socratic.org/questions/what-is-the-z-score-corresponding-to-the-top-10-percent-of-any-data-set
+nearest_value_z_top10_roof <- 1.29 # Z score for 0.9015, Standard normal table
+nearest_value_z_top10_floor <- 1.28 # Z score 0.8997, Standard normal table
+nearest_value_p_top10_roof <- 0.9015
+nearest_value_p_top10_floor <- 0.8997
+
+top10_way_0.9 <- ((0.9 - nearest_value_p_top10_roof) / (nearest_value_p_top10_floor - nearest_value_p_top10_roof))
+
+z_score_top_10 <- nearest_value_z_top10_roof + ((nearest_value_z_top10_floor - nearest_value_z_top10_roof) * (top10_way_0.9))
+
+cat("Author with a Z-Score over", z_score_top_10, "are evaluated as part of the top 10%.")
+
+for(i in 1:nrow(df_h1)){
+  row <- df_h1[i,]
+  sub_df_qc <- df_qc[df_qc$Inventors == row$Inventor, ]
+  # Include amount of published pantents evaluation of inventor, to avoid inventor that have only published one patent, where no clear IPC classes diversity is observable
+  # TODO: CRITICAL OPINION, CHECK
+  if((row$Herf_Index_ZScore >= z_score_top_10) & (nrow(sub_df_qc) > 1)){
+    df_h1[df_h1$Inventor == row$Inventor, "Diversity_Type"] <- "Specialist"
+  }
+}
+
+
+# Evaluate who is a Generalist
 # (1-H) <=  (Lowest 10% Herfindhal index distribution)
+# No Linear Interpolation needed, as we found exactly 0.1 value
+nearest_value_z_lowest10 <- -1.28 # Z score for 0.1003, Standard normal table
+nearest_value_p_lowest10 <- 0.1003
+
+lowest10_herf_index <- mean(df_h1$Herf_Index) + ((nearest_value_z_lowest10) * sd(df_h1$Herf_Index))
+
+cat("Author with a Herf-Index under", lowest10_herf_index, "are evaluated as part of the lowest 10%.")
+
+for(i in 1:nrow(df_h1)){
+  row <- df_h1[i,]
+  sub_df_qc <- df_qc[df_qc$Inventors == row$Inventor, ]
+  # Include amount of published patents evaluation of inventor, to avoid inventor that have only published one patent, where no clear IPC classes diversity is observable
+  # TODO: CRITICAL OPINION, CHECK
+  if((row$Herf_Index <= lowest10_herf_index) & (nrow(sub_df_qc) > 1)){
+    df_h1[df_h1$Inventor == row$Inventor, "Diversity_Type"] <- "Generalist"
+  }
+}
 
 # Connect brokerage and generalist/specialist distribution in final numbers
+broker_diversity <- df_h1[df_h1$IsBroker == "Broker" & df_h1$Diversity_Type != "None",]
 
-# Visualize results
+cat("In total", nrow(broker_diversity) ,"brokers with given diversity types were identified.")
 
+table(broker_diversity$Diversity_Type)
+
+cat("From these brokers, we identified 10 Generalists, which equals to a distribution of", (10/nrow(broker_diversity)) * 100, "% \n")
+cat("From these brokers, we identified 9 Specialists, which equals to a distribution of", (9/nrow(broker_diversity)) * 100, "%")
+
+# Visualize key players
+nodes_groups <- vector()
+
+for (current_node in vis_data$nodes$id){
+  if (current_node %in% df_h1$Inventor[df_h1$IsBroker == "Broker"]){
+    if(current_node %in% broker_diversity$Inventor){
+      nodes_groups <- c(nodes_groups, "Green")
+    }else{
+      nodes_groups <- c(nodes_groups, "Red")
+    }
+  }else{
+    nodes_groups <- c(nodes_groups, "Black")
+  }
+}
+
+#vis_data$nodes$group <- nodes_groups 
+vis_data$nodes$color <- nodes_groups 
+
+vis_network_2 <- visNetwork(nodes = vis_data$nodes, edges = vis_data$edges, width = "100%")
+
+# Red Nodes = Broker in general
+# Green Nodes = Broker with Diversity Type
+# Black Nodes = Others
+vis_network_2 %>% 
+  visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -100, avoidOverlap = 1)) %>%
+  visIgraphLayout(layout = "layout_nicely", physics = FALSE, smooth=F)
 ```
 
 ---
@@ -219,15 +390,56 @@ for(inventor in unique_inventors){
 * **H2: We expect that more generalists who adopt the broker role in a network to be of academic origin.**
 
 ```{r}
-# Use the dataframe from H1
-
+# We are continuing using the dataframe from H1.
 # Determine origin of each inventor | view & use dataframe "edge_list"
+# Selecting of applicant type is based on the majority of type occurrences, see function "identify_applicant_type" in 2.1
+df_h2 <- data.frame(from=edge_list$from, to=edge_list$to, group=edge_list$group)
+
+for(i in 1:nrow(df_h1)){
+  row <- df_h1[i,]
+  df_sub <- df_h2[df_h2$from == row$Inventor, ]
+  df_h1[df_h1$Inventor == row$Inventor, "Applicant_Type"] <- names(which.max(table(df_sub$group)))
+}
+
+cat("Overall Distribution of applicant types through all Inventors")
+table_applicant_type <- table(df_h1$Applicant_Type)
+print(table_applicant_type)
+df_applicant_type <- as.data.frame(table_applicant_type)
+df_applicant_type$Distribution <- df_applicant_type$Freq / sum(df_applicant_type$Freq)
 
 # Calculate distribution of identified generalist who are brokers and the applicant type
+generalist_with_applicant_type <- df_h1[df_h1$IsBroker == "Broker" & df_h1$Diversity_Type == "Generalist",]
 
 # Output results in numbers
+table(generalist_with_applicant_type$Applicant_Type)
 
-# Visualize results
+amount_generalists <- nrow(generalist_with_applicant_type)
+
+cat("From", amount_generalists,"generalists, we identified 3 of academic origin, which equals to a distribution of", (3/amount_generalists) * 100, "% \n")
+cat("From", amount_generalists,"generalists, we identified 7 of industrial origin, which equals to a distribution of", (7/amount_generalists) * 100, "% \n")
+
+# Draw Conclusion from subset on larger distribution by utilizing correlation factor
+pairwise_comp <- df_h1[c(6,7,8)]
+
+pairwise_comp$IsBroker <- factor(pairwise_comp$IsBroker)
+pairwise_comp$Diversity_Type <- factor(pairwise_comp$Diversity_Type)
+pairwise_comp$Applicant_Type <- factor(pairwise_comp$Applicant_Type)
+
+pairwise_comp <- pairwise_comp[pairwise_comp$IsBroker == "Broker",]
+
+mm <- model.matrix(~ IsBroker + Diversity_Type + Applicant_Type, data=pairwise_comp, contrasts.arg = lapply(pairwise_comp[, sapply(pairwise_comp, is.factor), drop = FALSE], contrasts, contrasts = FALSE))
+
+mm_cor <- cor(mm, use="pairwise.complete.obs", method = c("pearson", "kendall", "spearman"))
+
+colnames(mm_cor) <- c("(Intercept)", "Broker", "NotBroker", "Generalist", "None", "Specialist", "Academic", "Industrial", "Private")
+rownames(mm_cor) <- c("(Intercept)", "Broker", "NotBroker", "Generalist", "None", "Specialist", "Academic", "Industrial", "Private")
+
+mm_cor %>% ggcorrplot(show.diag = F, type = "lower", lab=TRUE, lab_size=2.5)
+
+cat("Correlation of Generalist and Academic is 0.14, given that the inspected inventors are brokers.")
+cat("Correlation of Generalist and Industrial is -0.12, given that the inspected inventors are brokers.")
+
+print("Despite the measurement of 10 generalists, where 3 inventors are of academic origin, the overall correlation factor of generalist in combination with academic is higher.")
 
 ```
 
