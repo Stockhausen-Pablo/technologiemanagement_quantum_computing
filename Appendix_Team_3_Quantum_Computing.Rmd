@@ -151,13 +151,13 @@ rm(list=c("prim_inventor","sec_inventor", "i"))
 
 ---
 
-**2.2 Create the graph object**
+**2.3 Create the graph object**
 ```{r}
-network_graph <- graph_from_adjacency_matrix(
-  edge_matrix,
-  mode = "undirected",
-  weighted = TRUE
-)
+df_visNetwork <- data.frame(from=edge_list$from, to=edge_list$to)
+network_graph <- graph_from_data_frame(
+  df_visNetwork,
+  directed = FALSE)  %>% 
+  simplify(remove.loops = TRUE)
 ```
 
 ---
@@ -181,9 +181,7 @@ mtext("Network graph based on fruchtermanreingold layout", side=1)
 **3.2 Preview of network graph with visNetwork**
 
 ```{r}
-df_visNetwork <- data.frame(from=edge_list$from, to=edge_list$to)
-vis_graph <- graph_from_data_frame(df_visNetwork, directed = FALSE)
-vis_data <- toVisNetworkData(vis_graph)
+vis_data <- toVisNetworkData(network_graph)
 vis_network <- visNetwork(nodes = vis_data$nodes, edges = vis_data$edges)
 
 vis_network %>% 
@@ -207,7 +205,7 @@ df_ipc_qc$IPC <- substring(df_ipc_qc$IPC, 1, 4)
 
 unique_inventors <- unique(df_ipc_qc$Inventors)
 
-df_h1 <- data.frame(Inventor=unique_inventors, Katz_Centr = 1.000000, Betw_Centr = 0, Herf_Index = 0, Herf_Index_ZScore = 0, IsBroker="NotBroker", Diversity_Type="None", Applicant_Type="")
+df_h1 <- data.frame(Inventor=unique_inventors, Betw_Centr = 0, Degree_Centr=0, Degree_Centr_ZScore = 0, Herf_Index = 0, Herf_Index_ZScore = 0, IsBroker="NotBroker", Diversity_Type="None", Applicant_Type="", IsPeripheralPlayer="NotPeripheralPlayer")
 
 # Measure betweenness centrality for each inventor to determine the brokerage
 library(omnivor)
@@ -224,39 +222,10 @@ for(inventor in unique_inventors){
   }
 }
 
-# We are using Centrality measure by Katz as betweeness centrality gets manipulated by the isolated interconnected patent inventors, with alot of shortest paths. This is way we use a other calculation method that inspect the whole network edges, to have secondary factor for centrality.
-# Further we exclude inventors from the brokerage role that only have one patent.
-# Centrality measure by Katz
-# ...considering all direct connections and also the further interconnections of other actors
-# See: Landherr, A., Friedl, B., & Heidemann, J. (2010). A critical review of centrality measures in social networks. Bus Inform Syst Eng 2: 371–385.
-katzc <- katzcent(network_graph, vids = V(network_graph), alpha = 0.05)
-df_katzc <- data.frame(as.list(katzc))
-t_df_katzc <- transpose(df_katzc)
-t_df_katzc$Inventor <- colnames(df_katzc)
-
-for(inventor in unique_inventors){
-  sub_df_qc <- df_qc[df_qc$Inventors == inventor, ]
-  if(nrow(sub_df_qc) > 1){
-    centr <- t_df_katzc[t_df_katzc$Inventor == inventor, "V1"]
-    df_h1[df_h1$Inventor == inventor, "Katz_Centr"] <- centr
-  }
-}
-
-# Normalize Columns for visualization purpose
-normalization<-function(x){
-    return((x-min(x))/(max(x)-min(x)))
-}
-df_h1$Betw_Centr <- normalization(df_h1$Betw_Centr)
-df_h1$Katz_Centr <- normalization(df_h1$Katz_Centr)
-
-# Plot correlation between betweeness centrality and Katz Centrality measure
-
 # Mark who is a broker
 for(i in 1:nrow(df_h1)){
   row <- df_h1[i,]
-  if((row$Betw_Centr > 0) | (row$Katz_Centr > 0)){
-  #if((row$Betw_Centr > 0) & (row$Katz_Centr > 1)){
-  #if((row$Betw_Centr > 0)){
+  if((row$Betw_Centr > 0)){
     df_h1[df_h1$Inventor == row$Inventor, "IsBroker"] <- "Broker"
   }
 }
@@ -291,10 +260,10 @@ lines(xfit, yfit, col="blue", lwd=2)
 # z score tells you how far a value is from the average of the data in terms of standard deviations.
 df_h1 <- df_h1 %>% mutate(Herf_Index_ZScore = (Herf_Index - mean(Herf_Index))/sd(Herf_Index))
 
-# Plot Distribution of Z-Scores
+# Plot Distribution of Herf-Index Z-Scores
 ggplot(df_h1, aes(x = Herf_Index_ZScore)) +
   geom_density() +
-  labs(x = "\n Z-Score (z)", y = "Density of (z)", title = "Distribution of (z)\n") +
+  labs(x = "\n Z-Score (z)", y = "Density of (z)", title = "Distribution of Herf-Index Z-Scores\n") +
   theme(plot.title = element_text(hjust = 0.5), 
         axis.title.x = element_text(face="bold", colour="brown", size = 12),
         axis.title.y = element_text(face="bold", colour="brown", size = 12))
@@ -303,7 +272,7 @@ ggplot(df_h1, aes(x = Herf_Index_ZScore)) +
 # H >= (Top 10% Herfindhal index z-score distribution)
 # Calculate top 10%
 # P(Z > c) = 0.1 ==> P(Z < c) = 0.9
-# use linear interpolation to find nearest values as 0.9 is not present in z table
+# use linear interpolation to approximate nearest values
 # For further information, see: https://socratic.org/questions/what-is-the-z-score-corresponding-to-the-top-10-percent-of-any-data-set
 nearest_value_z_top10_roof <- 1.29 # Z score for 0.9015, Standard normal table
 nearest_value_z_top10_floor <- 1.28 # Z score 0.8997, Standard normal table
@@ -314,35 +283,43 @@ top10_way_0.9 <- ((0.9 - nearest_value_p_top10_roof) / (nearest_value_p_top10_fl
 
 z_score_top_10 <- nearest_value_z_top10_roof + ((nearest_value_z_top10_floor - nearest_value_z_top10_roof) * (top10_way_0.9))
 
-cat("Author with a Z-Score over", z_score_top_10, "are evaluated as part of the top 10%.")
+raw_score_top_10 <- mean(df_h1$Herf_Index) + ((z_score_top_10) * sd(df_h1$Herf_Index))
+
+cat("Author with a Herf Index over", raw_score_top_10, "are evaluated as part of the top 10%.")
 
 for(i in 1:nrow(df_h1)){
   row <- df_h1[i,]
   sub_df_qc <- df_qc[df_qc$Inventors == row$Inventor, ]
   # Include amount of published pantents evaluation of inventor, to avoid inventor that have only published one patent, where no clear IPC classes diversity is observable
   # TODO: CRITICAL OPINION, CHECK
-  if((row$Herf_Index_ZScore >= z_score_top_10) & (nrow(sub_df_qc) > 1)){
+  if((row$Herf_Index >= raw_score_top_10) & (nrow(sub_df_qc) > 1)){
     df_h1[df_h1$Inventor == row$Inventor, "Diversity_Type"] <- "Specialist"
   }
 }
 
-
 # Evaluate who is a Generalist
-# (1-H) <=  (Lowest 10% Herfindhal index distribution)
-# No Linear Interpolation needed, as we found exactly 0.1 value
-nearest_value_z_lowest10 <- -1.28 # Z score for 0.1003, Standard normal table
-nearest_value_p_lowest10 <- 0.1003
+# Lowest 10% Herfindhal index distribution
+# For more information, see: https://www.dummies.com/article/academics-the-arts/math/statistics/how-to-find-a-percentile-for-a-normal-distribution-169600/
+# Use linear interpolation
+nearest_value_z_lowest10_roof <- -1.28 # Z score for 0.1003, Standard normal table
+nearest_value_z_lowest10_floor <- -1.29 # Z score for 0.0985, Standard normal table
+nearest_value_p_lowest10_roof <- 0.1003
+nearest_value_p_lowest10_floor <- 0.0985
 
-lowest10_herf_index <- mean(df_h1$Herf_Index) + ((nearest_value_z_lowest10) * sd(df_h1$Herf_Index))
+lowest10_way_0.9 <- ((0.1 - nearest_value_p_lowest10_roof) / (nearest_value_p_lowest10_floor - nearest_value_p_lowest10_roof))
 
-cat("Author with a Herf-Index under", lowest10_herf_index, "are evaluated as part of the lowest 10%.")
+z_score_lowest_10 <- nearest_value_z_lowest10_roof + ((nearest_value_z_lowest10_floor - nearest_value_z_lowest10_roof) * (lowest10_way_0.9))
+
+raw_score_lowest_10 <- mean(df_h1$Herf_Index) + ((z_score_lowest_10) * sd(df_h1$Herf_Index))
+
+cat("Author with a Herf Index under", raw_score_lowest_10, "are evaluated as part of the lowest 10%.")
 
 for(i in 1:nrow(df_h1)){
   row <- df_h1[i,]
   sub_df_qc <- df_qc[df_qc$Inventors == row$Inventor, ]
   # Include amount of published patents evaluation of inventor, to avoid inventor that have only published one patent, where no clear IPC classes diversity is observable
   # TODO: CRITICAL OPINION, CHECK
-  if((row$Herf_Index <= lowest10_herf_index) & (nrow(sub_df_qc) > 1)){
+  if((row$Herf_Index <= raw_score_lowest_10) & (nrow(sub_df_qc) > 1)){
     df_h1[df_h1$Inventor == row$Inventor, "Diversity_Type"] <- "Generalist"
   }
 }
@@ -352,10 +329,12 @@ broker_diversity <- df_h1[df_h1$IsBroker == "Broker" & df_h1$Diversity_Type != "
 
 cat("In total", nrow(broker_diversity) ,"brokers with given diversity types were identified.")
 
-table(broker_diversity$Diversity_Type)
+print(table(broker_diversity$Diversity_Type))
 
-cat("From these brokers, we identified 10 Generalists, which equals to a distribution of", (10/nrow(broker_diversity)) * 100, "% \n")
-cat("From these brokers, we identified 9 Specialists, which equals to a distribution of", (9/nrow(broker_diversity)) * 100, "%")
+cat("From these brokers, we identified 20 Generalists, which equals to a distribution of", (20/nrow(broker_diversity)) * 100, "% \n")
+cat("From these brokers, we identified 10 Specialists, which equals to a distribution of", (10/nrow(broker_diversity)) * 100, "%")
+
+print("There are more generalists than specialists based on the broker distribution.")
 
 # Visualize key players
 nodes_groups <- vector()
@@ -401,25 +380,25 @@ for(i in 1:nrow(df_h1)){
   df_h1[df_h1$Inventor == row$Inventor, "Applicant_Type"] <- names(which.max(table(df_sub$group)))
 }
 
-cat("Overall Distribution of applicant types through all Inventors")
 table_applicant_type <- table(df_h1$Applicant_Type)
+cat("Overall Distribution of applicant types through all Inventors")
 print(table_applicant_type)
 df_applicant_type <- as.data.frame(table_applicant_type)
 df_applicant_type$Distribution <- df_applicant_type$Freq / sum(df_applicant_type$Freq)
 
-# Calculate distribution of identified generalist who are brokers and the applicant type
+# Calculate distribution of diversities types of the identified generalist who are brokers
 generalist_with_applicant_type <- df_h1[df_h1$IsBroker == "Broker" & df_h1$Diversity_Type == "Generalist",]
 
 # Output results in numbers
-table(generalist_with_applicant_type$Applicant_Type)
+print(table(generalist_with_applicant_type$Applicant_Type))
 
 amount_generalists <- nrow(generalist_with_applicant_type)
 
 cat("From", amount_generalists,"generalists, we identified 3 of academic origin, which equals to a distribution of", (3/amount_generalists) * 100, "% \n")
-cat("From", amount_generalists,"generalists, we identified 7 of industrial origin, which equals to a distribution of", (7/amount_generalists) * 100, "% \n")
+cat("From", amount_generalists,"generalists, we identified 17 of industrial origin, which equals to a distribution of", (17/amount_generalists) * 100, "% \n")
 
 # Draw Conclusion from subset on larger distribution by utilizing correlation factor
-pairwise_comp <- df_h1[c(6,7,8)]
+pairwise_comp <- df_h1[c(7,8,9)]
 
 pairwise_comp$IsBroker <- factor(pairwise_comp$IsBroker)
 pairwise_comp$Diversity_Type <- factor(pairwise_comp$Diversity_Type)
@@ -436,10 +415,10 @@ rownames(mm_cor) <- c("(Intercept)", "Broker", "NotBroker", "Generalist", "None"
 
 mm_cor %>% ggcorrplot(show.diag = F, type = "lower", lab=TRUE, lab_size=2.5)
 
-cat("Correlation of Generalist and Academic is 0.14, given that the inspected inventors are brokers.")
-cat("Correlation of Generalist and Industrial is -0.12, given that the inspected inventors are brokers.")
+cat("Correlation of Generalist and Academic is 0.17, given that the inspected inventors are brokers.")
+cat("Correlation of Generalist and Industrial is -0.13, given that the inspected inventors are brokers.")
 
-print("Despite the measurement of 10 generalists, where 3 inventors are of academic origin, the overall correlation factor of generalist in combination with academic is higher.")
+cat("Despite the measurement of", amount_generalists,"generalists, where 3 inventors are of academic origin, the overall correlation factor of generalist in combination with academic is higher.")
 
 ```
 
@@ -448,14 +427,90 @@ print("Despite the measurement of 10 generalists, where 3 inventors are of acade
 * **H3: We expect peripheral players to be specialists.**
 
 ```{r}
-# Calculate centrality for each inventor
+# Calculate out-degree centrality for each inventor
+degree_centrality <- degree(network_graph, mode = "out", normalized = T)
+df_degree_centr <- data.frame(as.list(degree_centrality))
+t_df_degree_centr <- transpose(df_degree_centr)
+t_df_degree_centr$Inventor <- colnames(df_degree_centr)
 
-# Find a percentage of lowest centrality distribution who are the peripheral players
+# Add out-degree centrality to df_h1
+for(i in 1:nrow(t_df_degree_centr)){
+  row <- t_df_degree_centr[i,]
+  df_h1[df_h1$Inventor == row$Inventor, "Degree_Centr"] <- row$V1 
+}
+
+# Calculate Z scores for Degree_Centr
+# Adapt approach from H1 towards calculating lowest 10%
+df_h1 <- df_h1 %>% mutate(Degree_Centr_ZScore = (Degree_Centr - mean(Degree_Centr))/sd(Degree_Centr))
+
+mean_degree_centr <- (mean(df_h1$Degree_Centr))
+cat("Mean of degree centrality distribution:",mean_degree_centr,"\n")
+
+sd_degree_centr <- sd(df_h1$Degree_Centr)
+cat("Standard Deviation of degree centrality distribution:",sd_degree_centr,"\n")
+
+raw_score_lowest_10_degree_centr <- abs(mean(df_h1$Degree_Centr) + (z_score_lowest_10 * sd(df_h1$Degree_Centr))) # Take absolute value, as standard deviation is larger than mean --> TODO: CHECK IF ABS() IS ALLOWED
+
+cat("Author with a Degree Centrality of under", raw_score_lowest_10_degree_centr, "are evaluated as part of the lowest 10% and therefore are peripheral players.")
+
+# Plot Distribution of Degree Centrality Z-Scores
+ggplot(df_h1, aes(x = Degree_Centr_ZScore)) +
+  geom_density() +
+  labs(x = "\n Z-Score (z)", y = "Density of (z)", title = "Distribution of Degree Centrality Z-Scores\n") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        axis.title.x = element_text(face="bold", colour="brown", size = 12),
+        axis.title.y = element_text(face="bold", colour="brown", size = 12))
 
 # Get the distribution of generalist/specialist based on the peripheral players
+for(i in 1:nrow(df_h1)){
+  row <- df_h1[i,]
+  sub_df_qc <- df_qc[df_qc$Inventors == row$Inventor, ]
+  if(row$Degree_Centr <= raw_score_lowest_10_degree_centr){
+    df_h1[df_h1$Inventor == row$Inventor, "IsPeripheralPlayer"] <- "PeripheralPlayer"
+  }
+}
 
-# Output result in numbers
+peripheral_diversity <- df_h1[df_h1$IsPeripheralPlaye == "PeripheralPlayer" & df_h1$Diversity_Type != "None",]
+
+table(peripheral_diversity$Diversity_Type)
+
+print("Only one of each Diversity Types identified. Based on that measurement no answer towards the hypothesis 3 can be made.")
+
+# Get the distribution of Herf Index based on the peripheral players
+df_peripheral <- df_h1[df_h1$IsPeripheralPlaye == "PeripheralPlayer",]
+
+ggplot(df_peripheral, aes(x = Herf_Index)) +
+  geom_density() +
+  labs(x = "\n Herfindahl Index (H)", y = "Density of Herfindahl Index (H) \n", title = "Distribution of Herf Index based on peripheral player\n") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        axis.title.x = element_text(face="bold", colour="brown", size = 12),
+        axis.title.y = element_text(face="bold", colour="brown", size = 12))
+
+print("Interpretation of Herfindahl Index Distribution based on existing peripheral players:")
+print("There is a trends towards a lower herf index value observable. This allows us to derive an orientation of Peripheral Players towards the Specialists segment.")
 
 # Visualize results
+vis_data_h3 <- toVisNetworkData(network_graph)
+vis_network_h3 <- visNetwork(nodes = vis_data_h3$nodes, edges = vis_data_h3$edges)
+
+nodes_groups_h3 <- vector()
+
+for (current_node in vis_data_h3$nodes$id){
+  if (current_node %in% df_h1$Inventor[df_h1$IsPeripheralPlayer == "PeripheralPlayer"]){
+    nodes_groups_h3 <- c(nodes_groups_h3, "Blue")
+  }else{
+    nodes_groups_h3 <- c(nodes_groups_h3, "Black")
+  }
+}
+
+vis_data_h3$nodes$color <- nodes_groups_h3
+
+vis_network_h3 <- visNetwork(nodes = vis_data_h3$nodes, edges = vis_data_h3$edges, width = "100%")
+
+# Blue Nodes = Peripheral Players
+# Black Nodes = Not Peripheral Players
+vis_network_h3 %>% 
+  visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -100, avoidOverlap = 1)) %>%
+  visIgraphLayout(layout = "layout_nicely", physics = FALSE, smooth=F)
 
 ```
