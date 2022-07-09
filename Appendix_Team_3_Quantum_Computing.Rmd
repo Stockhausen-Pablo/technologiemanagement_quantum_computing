@@ -1,10 +1,15 @@
 ---
 title: "Appendix Team 3 Quantum_Computing"
-output: html_document
-author: "Pablo Stockhausen, "
+author: 'Pablo Stockhausen, '
 date: '2022-06-26'
+output:
+  html_document: default
+  pdf_document:
+    pandoc_args: --listings
+    includes:
+      in_header: preamble.tex
 ---
-
+    
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -474,20 +479,24 @@ peripheral_diversity <- df_h1[df_h1$IsPeripheralPlaye == "PeripheralPlayer" & df
 
 table(peripheral_diversity$Diversity_Type)
 
-print("Only one of each Diversity Types identified. Based on that measurement no answer towards the hypothesis 3 can be made.")
+print("Only one of each Diversity Types identified.")
+print("Based on that measurement no answer towards the hypothesis 3 can be made.")
 
 # Get the distribution of Herf Index based on the peripheral players
 df_peripheral <- df_h1[df_h1$IsPeripheralPlaye == "PeripheralPlayer",]
 
 ggplot(df_peripheral, aes(x = Herf_Index)) +
   geom_density() +
-  labs(x = "\n Herfindahl Index (H)", y = "Density of Herfindahl Index (H) \n", title = "Distribution of Herf Index based on peripheral players\n") +
+  labs(x = "\n Herfindahl Index (H)",
+       y = "Density of Herfindahl Index (H) \n",
+       title = "Distribution of Herf Index based on peripheral players\n") +
   theme(plot.title = element_text(hjust = 0.5), 
         axis.title.x = element_text(face="bold", colour="brown", size = 12),
         axis.title.y = element_text(face="bold", colour="brown", size = 12))
 
 print("Interpretation of Herfindahl Index Distribution based on existing peripheral players:")
-print("There is a trends towards a lower herf index value observable. This allows us to derive an orientation of peripheral players towards the generalists segment. This is contrary to our stated hypothesis.")
+print("There is a trends towards a lower herf index value observable.")
+print("This allows us to derive an orientation of peripheral players towards the generalists segment. This is contrary to our stated hypothesis.")
 
 # Visualize results
 vis_data_h3 <- toVisNetworkData(network_graph)
@@ -510,7 +519,8 @@ vis_network_h3 <- visNetwork(nodes = vis_data_h3$nodes, edges = vis_data_h3$edge
 # Blue Nodes = Peripheral Players
 # Black Nodes = Not Peripheral Players
 vis_network_h3 %>% 
-  visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -100, avoidOverlap = 1)) %>%
+  visPhysics(solver = "forceAtlas2Based", 
+             forceAtlas2Based = list(gravitationalConstant = -100, avoidOverlap = 1)) %>%
   visIgraphLayout(layout = "layout_nicely", physics = FALSE, smooth=F)
 
 ```
