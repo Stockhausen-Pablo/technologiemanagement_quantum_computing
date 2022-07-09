@@ -481,13 +481,13 @@ df_peripheral <- df_h1[df_h1$IsPeripheralPlaye == "PeripheralPlayer",]
 
 ggplot(df_peripheral, aes(x = Herf_Index)) +
   geom_density() +
-  labs(x = "\n Herfindahl Index (H)", y = "Density of Herfindahl Index (H) \n", title = "Distribution of Herf Index based on peripheral player\n") +
+  labs(x = "\n Herfindahl Index (H)", y = "Density of Herfindahl Index (H) \n", title = "Distribution of Herf Index based on peripheral players\n") +
   theme(plot.title = element_text(hjust = 0.5), 
         axis.title.x = element_text(face="bold", colour="brown", size = 12),
         axis.title.y = element_text(face="bold", colour="brown", size = 12))
 
 print("Interpretation of Herfindahl Index Distribution based on existing peripheral players:")
-print("There is a trends towards a lower herf index value observable. This allows us to derive an orientation of Peripheral Players towards the Specialists segment.")
+print("There is a trends towards a lower herf index value observable. This allows us to derive an orientation of peripheral players towards the generalists segment. This is contrary to our stated hypothesis.")
 
 # Visualize results
 vis_data_h3 <- toVisNetworkData(network_graph)
