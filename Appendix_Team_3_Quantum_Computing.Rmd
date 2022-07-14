@@ -3,11 +3,11 @@ title: "Appendix Team 3 Quantum_Computing"
 author: 'Pablo Stockhausen, '
 date: '2022-06-26'
 output:
-  html_document: default
   pdf_document:
     pandoc_args: --listings
     includes:
       in_header: preamble.tex
+  html_document: default
 ---
     
 ```{r setup, include=FALSE}
@@ -114,7 +114,7 @@ names(edge_list)[names(edge_list) == "Inventors.y"] <- "to"
 # Selecting of applicant type is based on the majority of type occurrences
 identify_applicant_type <- function(x){
   industrial <- "_INC_|INC_|LLC_|_LLC_|_CORP_|_CORPORATION_"
-  academic <- "UNIV_|_UNIV_|INST_|_INST_"
+  academic <- "UNIV_|_UNIV_|INST_|_INST_|_INST|RESEARCH_|_RESEARCH_|_RESEARCH|COUNCIL_|_COUNCIL_|_COUNCIL"
   if(grepl(industrial, x)){
     return("industrial")
   }else{
@@ -402,7 +402,7 @@ amount_generalists <- nrow(generalist_with_applicant_type)
 cat("From", amount_generalists,"generalists, we identified 3 of academic origin, which equals to a distribution of", (3/amount_generalists) * 100, "% \n")
 cat("From", amount_generalists,"generalists, we identified 17 of industrial origin, which equals to a distribution of", (17/amount_generalists) * 100, "% \n")
 
-# Draw Conclusion from subset on larger distribution by utilizing correlation factor
+# Draw Conclusion from subset on larger distribution by utilizing the correlation coefficient based on pearson's method
 pairwise_comp <- df_h1[c(7,8,9)]
 
 pairwise_comp$IsBroker <- factor(pairwise_comp$IsBroker)
@@ -411,9 +411,11 @@ pairwise_comp$Applicant_Type <- factor(pairwise_comp$Applicant_Type)
 
 pairwise_comp <- pairwise_comp[pairwise_comp$IsBroker == "Broker",]
 
+# Convert to bivariate binary distribution (Diversity and Applicant Type), as the data set is based on only brokers
 mm <- model.matrix(~ IsBroker + Diversity_Type + Applicant_Type, data=pairwise_comp, contrasts.arg = lapply(pairwise_comp[, sapply(pairwise_comp, is.factor), drop = FALSE], contrasts, contrasts = FALSE))
 
-mm_cor <- cor(mm, use="pairwise.complete.obs", method = c("pearson", "kendall", "spearman"))
+# pairwise.complete.obs means that the correlation or covariance between each pair of variables is computed using all complete pairs of observations on those variables
+mm_cor <- cor(mm, use="pairwise.complete.obs", method = c("pearson"))
 
 colnames(mm_cor) <- c("(Intercept)", "Broker", "NotBroker", "Generalist", "None", "Specialist", "Academic", "Industrial", "Private")
 rownames(mm_cor) <- c("(Intercept)", "Broker", "NotBroker", "Generalist", "None", "Specialist", "Academic", "Industrial", "Private")
