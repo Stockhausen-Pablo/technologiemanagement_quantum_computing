@@ -3,11 +3,11 @@ title: "Appendix Team 3 Quantum_Computing"
 author: 'Group 3'
 date: '2022-06-26'
 output:
+  html_document: default
   pdf_document:
     pandoc_args: --listings
     includes:
       in_header: preamble.tex
-  html_document: default
 ---
     
 ```{r setup, include=FALSE}
@@ -369,7 +369,7 @@ vis_network_2 %>%
 
 ---
 
-* **H2: We expect that more generalists who adopt the broker role in a network to be of academic origin.**
+* **H2: We expect generalist inventors of academic origin to adopt the broker role more often than generalist inventors of industrial or private origin.**
 
 ```{r}
 # We are continuing using the dataframe from H1.
@@ -448,7 +448,7 @@ for(i in 1:nrow(t_df_degree_centr)){
 df_h1 <- df_h1 %>% mutate(Degree_Centr_ZScore = (Degree_Centr - mean(Degree_Centr))/sd(Degree_Centr))
 
 # Adapt approach from H1 towards calculating lowest 10%
-# Lowest 30% Herfindhal index distribution, as distribution indicates that there are few inventors with way more connections than the majority.
+# Lowest 30% of the degree centrality, as distribution indicates that there are few inventors with way more connections than the majority.
 # This is indicated by the fact, that the standard deviation is larger than the mean.
 # Use linear interpolation to capture edge cases
 nearest_value_z_lowest30_roof <- -0.52 # Z score for 0.30153, Standard normal table
